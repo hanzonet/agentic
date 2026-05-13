@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 // Post-quantum cryptography
 use pqcrypto_kyber::kyber1024;
 use pqcrypto_dilithium::dilithium5;
+use pqcrypto_traits::kem::{PublicKey as _, SecretKey as _, Ciphertext as _, SharedSecret as _};
+use pqcrypto_traits::sign::{PublicKey as _, SecretKey as _, SignedMessage as _};
 
 /// FFI bindings to lux/api agentic network
 extern "C" {
@@ -60,16 +62,28 @@ pub struct AgentCapabilities {
     pub trust_level: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct KEMKeyPair {
     pub public_key: kyber1024::PublicKey,
     pub secret_key: kyber1024::SecretKey,
 }
 
-#[derive(Debug, Clone)]
+impl std::fmt::Debug for KEMKeyPair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KEMKeyPair").field("public_key", &"<kyber1024 pk>").finish()
+    }
+}
+
+#[derive(Clone)]
 pub struct SignatureKeyPair {
     pub public_key: dilithium5::PublicKey,
     pub secret_key: dilithium5::SecretKey,
+}
+
+impl std::fmt::Debug for SignatureKeyPair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SignatureKeyPair").field("public_key", &"<dilithium5 pk>").finish()
+    }
 }
 
 impl HanzoAgenticNode {
@@ -200,10 +214,10 @@ impl HanzoAgenticNode {
     }
     
     fn symmetric_encrypt(&self, data: &[u8], key: &[u8]) -> Result<Vec<u8>, AgenticError> {
-        use aes_gcm::{Aes256Gcm, Key, Nonce, aead::{Aead, NewAead}};
+        use aes_gcm::{Aes256Gcm, Key, Nonce, aead::{Aead, KeyInit}};
         use rand::Rng;
-        
-        let cipher_key = Key::from_slice(&key[..32]);
+
+        let cipher_key: &Key<Aes256Gcm> = (&key[..32]).into();
         let cipher = Aes256Gcm::new(cipher_key);
         
         let mut nonce_bytes = [0u8; 12];
